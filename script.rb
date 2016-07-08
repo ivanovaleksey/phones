@@ -13,7 +13,7 @@ class Worker
 
   def call
     fetch_rows
-    p call_stats[102]
+    p call_stats[110]
   end
 
   private
@@ -34,18 +34,46 @@ class Worker
   end
 
   def call_stats
-    @call_stats ||= calls_by_number.each_with_object({}) do |(number, calls), hash|
-      sorted_calls = calls.sort_by { |call| call[:datetime] }
-      hash[number] = {
-        first: sorted_calls.first[:datetime],
-        last:  sorted_calls.last[:datetime],
-        count: sorted_calls.count
-      }
+    @call_stats ||= begin
+      stats = calls_by_number.each_with_object({}) do |(number, calls), hash|
+        sorted_calls = calls.sort_by { |call| call[:datetime] }
+        hash[number] = {
+          main: {
+            first: sorted_calls.first[:datetime],
+            last:  sorted_calls.last[:datetime],
+            count: sorted_calls.count
+          }
+        }
+      end
+
+      special_numbers.each do |number|
+        before_17 = calls_by_number[number].select { |call| call[:datetime].hour < 17 }.sort_by { |call| call[:datetime] }
+        after_17  = calls_by_number[number].select { |call| call[:datetime].hour >= 17 }.sort_by { |call| call[:datetime] }
+
+        stats[number] = {
+          before_17: {
+            first: before_17.first[:datetime],
+            last:  before_17.last[:datetime],
+            count: before_17.count
+          },
+          after_17: {
+            first: after_17.first[:datetime],
+            last:  after_17.last[:datetime],
+            count: after_17.count
+          }
+        }
+      end
+
+      stats
     end
   end
 
   def keys
     [:id, :sip, :datetime, :clid, :number, :state, :duration]
+  end
+
+  def special_numbers
+    [110, 111]
   end
 
 end
@@ -61,7 +89,7 @@ class Dialog
   def call
     dialog = MRDialog.new
     dialog.clear = true
-    dialog.title = "Please choose a file"
+    dialog.title = 'Please choose a file'
 
     if file = dialog.fselect(initial_filename, h, w)
       puts '', 'Start'
