@@ -18,7 +18,8 @@ class Worker
 
     def call_stats(type)
       method_name = "#{type}_calls_by_number".to_sym
-      stats = send(method_name).each_with_object({}) do |(number, calls), hash|
+      calls_by_number = send(method_name)
+      stats = calls_by_number.reject { |number, _| special_number? number }.each_with_object({}) do |(number, calls), hash|
         sorted_calls = calls.sort_by { |call| call[:datetime] }
         hash[number] = {
           main: {
@@ -30,18 +31,19 @@ class Worker
       end
 
       special_numbers.each do |number|
-        before_17 = send(method_name)[number].select { |call| call[:datetime].hour < 17 }.sort_by { |call| call[:datetime] }
-        after_17  = send(method_name)[number].select { |call| call[:datetime].hour >= 17 }.sort_by { |call| call[:datetime] }
+        next unless calls_by_number[number]
+        before_17 = calls_by_number[number].select { |call| call[:datetime].hour < 17  }.sort_by { |call| call[:datetime] }
+        after_17  = calls_by_number[number].select { |call| call[:datetime].hour >= 17 }.sort_by { |call| call[:datetime] }
 
         stats[number] = {
           before_17: {
-            first: before_17.first ? before_17.first[:datetime] : nil,
-            last:  before_17.last ? before_17.last[:datetime] : nil,
+            first: before_17.empty? ? nil : before_17.first[:datetime],
+            last:  before_17.empty? ? nil : before_17.last[:datetime],
             count: before_17.count
           },
           after_17: {
-            first: after_17.first ? after_17.first[:datetime] : nil,
-            last:  after_17.last ? after_17.last[:datetime] : nil,
+            first: after_17.empty? ? nil : after_17.first[:datetime],
+            last:  after_17.empty? ? nil : after_17.last[:datetime],
             count: after_17.count
           }
         }
@@ -83,12 +85,20 @@ class Worker
       [:id, :sip, :datetime, :clid, :number, :state, :duration]
     end
 
+    def special_number?(number)
+      special_numbers.include? number
+    end
+
     def special_numbers
-      [110, 111]
+      @special_numbers ||= [110, 111]
     end
 
     def inner_number?(number)
-      (100...400).include? number
+      inner_numbers.include? number
+    end
+
+    def inner_numbers
+      @inner_numbers ||= 100...400
     end
   end
 
